@@ -17,7 +17,7 @@ spec:
       serviceAccountName: my-app-service-account
       containers:
       - name: python-app-container
-        image: 553963239682.dkr.ecr.us-east-2.amazonaws.com/my-python-app:latest
+        image: 553963239682.dkr.ecr.us-east-2.amazonaws.com/my-python-app:fb57b7a6fc9434cbc4b4b5315cfa4b07824682ed
         ports:
         - containerPort: 8000
         resources:
