@@ -1,0 +1,43 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: python-app-ingress
+  annotations:
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS":443}]'
+    alb.ingress.kubernetes.io/ssl-redirect: '443'
+    
+    # IMPORTANT: Replace with your actual AWS Certificate Manager ARN
+    alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:us-east-2:123456789012:certificate/your-cert-id
+    
+    alb.ingress.kubernetes.io/healthcheck-path: /
+    alb.ingress.kubernetes.io/healthcheck-interval-seconds: '15'
+    alb.ingress.kubernetes.io/success-codes: '200'
+spec:
+  rules:
+    - host: api.yourdomain.com
+      http:
+        paths:
+          - path: /api/*
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: python-app-service
+                port:
+                  number: 80
+          - path: /admin/*
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: python-app-service
+                port:
+                  number: 80
+          - path: /dashboard/*
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: python-app-service
+                port:
+                  number: 80

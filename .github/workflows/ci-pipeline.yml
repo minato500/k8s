@@ -1,0 +1,88 @@
+name: Production Monorepo CI/CD Pipeline
+
+on:  
+  push:    
+    branches:      
+      - main    
+    paths-ignore:      
+      - 'k8s-manifests/**'      
+      - 'README.md'
+
+env:  
+  AWS_REGION: us-east-2  
+  ECR_REPOSITORY: my-python-app
+
+jobs:  
+  test-and-scan:    
+    name: Code Quality and SAST/SCA    
+    runs-on: ubuntu-latest    
+    steps:      
+      - name: Checkout Code        
+        uses: actions/checkout@v4      
+      
+      - name: Set up Python 3.11        
+        uses: actions/setup-python@v4        
+        with:          
+          python-version: '3.11'          
+          cache: 'pip'      
+      
+      - name: Install Dependencies        
+        run: |          
+          python -m pip install --upgrade pip setuptools wheel
+          pip install -r requirements.txt      
+      
+      - name: Run Unit Tests        
+        run: PYTHONPATH=. pytest tests/      
+      
+      - name: Code Security Scan (Filesystem)        
+        uses: aquasecurity/trivy-action@master        
+        with:          
+          scan-type: 'fs'          
+          scan-ref: '.'          
+          exit-code: '1'          
+          severity: 'CRITICAL,HIGH'  
+
+  build-and-push:    
+    name: Docker Build & ECR Push    
+    needs: test-and-scan    
+    runs-on: ubuntu-latest    
+    steps:      
+      - name: Checkout Code        
+        uses: actions/checkout@v4      
+      
+      - name: Configure AWS credentials        
+        uses: aws-actions/configure-aws-credentials@v4        
+        with:          
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}          
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}          
+          aws-region: ${{ env.AWS_REGION }}      
+      
+      - name: Login to Amazon ECR        
+        id: login-ecr        
+        uses: aws-actions/amazon-ecr-login@v2      
+      
+      - name: Build Docker Image        
+        run: docker build -t ${{ steps.login-ecr.outputs.registry }}/$ECR_REPOSITORY:${{ github.sha }} .      
+            
+      - name: Push to Amazon ECR        
+        run: docker push ${{ steps.login-ecr.outputs.registry }}/$ECR_REPOSITORY:${{ github.sha }}  
+
+  update-gitops:    
+    name: Update ArgoCD Manifests    
+    needs: build-and-push    
+    runs-on: ubuntu-latest    
+    steps:      
+      - name: Checkout Code        
+        uses: actions/checkout@v4        
+        with:          
+          token: ${{ secrets.GITOPS_PAT }}      
+      
+      - name: Update Image Tag        
+        run: |          
+          sed -i "s|image: .*|image: 553963239682.dkr.ecr.us-east-2.amazonaws.com/${{ env.ECR_REPOSITORY }}:${{ github.sha }}|g" k8s-manifests/03-deployment.yaml                    
+          
+          git config user.name "CI Bot"          
+          git config user.email "ci-bot@example.com"          
+          git add k8s-manifests/03-deployment.yaml                    
+          git commit -m "Update python app image tag to ${{ github.sha }} [skip ci]"          
+          git push origin main
